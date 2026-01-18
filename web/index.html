@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeployNet Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            border-left: 4px solid #007bff;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        .logs {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 2px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        .warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 DeployNet P2P CDN Demo</h1>
+        
+        <div id="status" class="status disconnected">DeployNet Disconnected</div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Active Peers</div>
+                <div id="peer-count" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Cache Size</div>
+                <div id="cache-size" class="stat-value">0 MB</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Requests Served</div>
+                <div id="requests-served" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">P2P Ratio</div>
+                <div id="p2p-ratio" class="stat-value">0%</div>
+            </div>
+        </div>
+        
+        <div>
+            <button id="init-btn">Initialize DeployNet</button>
+            <button id="test-request">Test P2P Request</button>
+            <button id="clear-cache">Clear Cache</button>
+        </div>
+        
+        <h3>Activity Logs</h3>
+        <div id="logs" class="logs">
+            <div class="log-entry info">DeployNet demo loaded. Ready to initialize.</div>
+        </div>
+    </div>
+
+    <script src="client.js"></script>
+    <script>
+        // Add log entry
+        function addLog(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsDiv.appendChild(logEntry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Update stats
+        function updateStats(deployNet) {
+            if (deployNet) {
+                document.getElementById('peer-count').textContent = deployNet.peers.size;
+                
+                // Calculate cache size
+                let cacheSize = 0;
+                if (deployNet.cache && deployNet.cache.entries) {
+                    for (let [key, value] of deployNet.cache.entries) {
+                        cacheSize += new Blob([value]).size;
+                    }
+                }
+                document.getElementById('cache-size').textContent = (cacheSize / (1024 * 1024)).toFixed(2) + ' MB';
+                
+                // These would be updated based on actual metrics
+                document.getElementById('requests-served').textContent = '0';
+                document.getElementById('p2p-ratio').textContent = '0%';
+            }
+        }
+
+        // Initialize DeployNet
+        document.getElementById('init-btn').addEventListener('click', async () => {
+            try {
+                addLog('Initializing DeployNet client...', 'info');
+                
+                const deployNet = new DeployNetClient({
+                    signalingServer: 'ws://localhost:8080',
+                    siteId: 'deploy-net-demo',
+                    maxPeers: 5,
+                    cacheSize: 50 * 1024 * 1024 // 50MB
+                });
+                
+                window.deployNet = deployNet;
+                
+                const success = await deployNet.initialize();
+                
+                if (success) {
+                    document.getElementById('status').className = 'status connected';
+                    document.getElementById('status').textContent = 'DeployNet Connected';
+                    addLog('DeployNet client initialized successfully!', 'success');
+                    
+                    // Update stats periodically
+                    setInterval(() => updateStats(deployNet), 1000);
+                } else {
+                    document.getElementById('status').className = 'status disconnected';
+                    document.getElementById('status').textContent = 'DeployNet Failed to Connect';
+                    addLog('Failed to initialize DeployNet client', 'error');
+                }
+            } catch (error) {
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'DeployNet Error';
+                addLog(`Error initializing DeployNet: ${error.message}`, 'error');
+            }
+        });
+
+        // Test P2P request
+        document.getElementById('test-request').addEventListener('click', async () => {
+            if (!window.deployNet) {
+                addLog('DeployNet not initialized. Please initialize first.', 'error');
+                return;
+            }
+
+            addLog('Testing P2P request...', 'info');
+            
+            try {
+                // Try to fetch a test resource via P2P
+                const response = await fetch('/test-resource.txt');
+                const content = await response.text();
+                
+                addLog(`P2P request successful: ${response.headers.get('X-DeployNet-Source')} source`, 'success');
+                addLog(`Content length: ${content.length} characters`, 'info');
+            } catch (error) {
+                addLog(`P2P request failed: ${error.message}`, 'error');
+            }
+        });
+
+        // Clear cache
+        document.getElementById('clear-cache').addEventListener('click', () => {
+            if (window.deployNet && window.deployNet.cache) {
+                window.deployNet.cache.entries.clear();
+                window.deployNet.cache.accessTime.clear();
+                window.deployNet.cache.currentSize = 0;
+                addLog('Cache cleared successfully', 'success');
+                updateStats(window.deployNet);
+            } else {
+                addLog('DeployNet not initialized or cache not available', 'error');
+            }
+        });
+
+        // Create a test resource endpoint simulation
+        if (typeof window !== 'undefined') {
+            // This would normally be handled by a real server
+            // For demo purposes, we'll simulate a cached response
+            addLog('Demo page loaded. Initialize DeployNet to begin.', 'info');
+        }
+    </script>
+</body>
+</html>
